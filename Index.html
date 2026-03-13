@@ -1,0 +1,432 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Bill Splitter</title>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js">
+/* INVITE LINK */
+function generateInvite(){
+const group=currentGroup;
+const link=window.location.origin+window.location.pathname+"?group="+encodeURIComponent(group);
+inviteLink.value=link;
+}
+
+/* EXPORT PDF */
+function exportPDF(){
+const { jsPDF } = window.jspdf;
+const doc = new jsPDF();
+
+let y=10;
+
+doc.text("Bill Splitter Report",10,y);
+y+=10;
+
+friends.forEach(f=>{
+ doc.text(`${f} total paid: $${expenses[f]}`,10,y);
+ y+=8;
+});
+
+y+=5;
+doc.text("Bills:",10,y);
+y+=8;
+
+const items=billList.querySelectorAll("li");
+items.forEach(li=>{
+ doc.text(li.innerText,10,y);
+ y+=8;
+});
+
+doc.save("bill-report.pdf");
+}
+
+</script>
+
+<style>
+*{box-sizing:border-box;font-family:Arial, Helvetica, sans-serif;}
+body{margin:0;background:#eef1f7;}
+
+.auth-wrapper{height:100vh;display:flex;justify-content:center;align-items:center;padding:20px;}
+
+.container{width:100%;max-width:380px;background:white;padding:30px;border-radius:14px;box-shadow:0 10px 25px rgba(0,0,0,0.15);} 
+
+h2{text-align:center;margin-bottom:20px;color:#333;}
+
+input,select{width:100%;padding:12px;margin:8px 0;border-radius:8px;border:1px solid #ccc;font-size:14px;}
+
+button{width:100%;padding:12px;margin-top:10px;border:none;border-radius:8px;background:#4facfe;color:white;font-size:15px;cursor:pointer;}
+button:hover{background:#3793ff;}
+
+.links{text-align:center;margin-top:15px;font-size:14px;}
+.links a{color:#4facfe;text-decoration:none;cursor:pointer;}
+
+.error{color:red;font-size:13px;display:none;}
+.form{display:none;}
+.form.active{display:block;}
+
+.dashboard{display:none;min-height:100vh;}
+
+.navbar{background:white;padding:15px;display:flex;justify-content:space-between;align-items:center;box-shadow:0 2px 10px rgba(0,0,0,0.1);position:sticky;top:0;}
+
+.logout{background:#ff5c5c;padding:6px 12px;border:none;border-radius:6px;color:white;cursor:pointer;}
+
+.main{padding:15px;max-width:900px;margin:auto;}
+
+.card{background:white;padding:18px;border-radius:12px;margin-bottom:15px;box-shadow:0 4px 12px rgba(0,0,0,0.08);} 
+
+.friend-list li{display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #eee;font-size:14px;}
+
+.friend-actions button{width:auto;padding:4px 8px;margin-left:4px;font-size:11px;}
+
+.split-row{display:flex;gap:8px;margin:6px 0;}
+.split-row input{margin:0;font-size:13px;}
+
+.bill-list li{display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #eee;font-size:14px;}
+
+.summary div{padding:6px 0;border-bottom:1px solid #eee;font-size:14px;}
+
+.status-paid{color:green;font-weight:bold;}
+.status-pending{color:orange;font-weight:bold;}
+
+canvas{max-height:250px;}
+
+</style>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+</head>
+
+<body>
+
+<!-- AUTH -->
+<div class="auth-wrapper" id="authArea">
+<div class="container">
+
+<div id="loginForm" class="form active">
+<h2>Login</h2>
+<input type="email" id="loginEmail" placeholder="Email">
+<input type="password" id="loginPassword" placeholder="Password">
+<p class="error" id="loginError">Invalid login</p>
+<button onclick="login()">Login</button>
+<div class="links"><p>No account? <a onclick="showRegister()">Sign Up</a></p></div>
+</div>
+
+<div id="registerForm" class="form">
+<h2>Create Account</h2>
+<input type="text" placeholder="Full Name">
+<input type="email" placeholder="Email">
+<input type="password" id="registerPassword" placeholder="Password">
+<input type="password" id="confirmPassword" placeholder="Confirm Password">
+<p class="error" id="registerError">Passwords do not match</p>
+<button onclick="register()">Create Account</button>
+<div class="links"><p>Already have account? <a onclick="showLogin()">Login</a></p></div>
+</div>
+
+</div>
+</div>
+
+<!-- DASHBOARD -->
+<div class="dashboard" id="dashboard">
+
+<div class="navbar">
+<strong>Bill Splitter</strong>
+<button class="logout" onclick="logout()">Logout</button>
+</div>
+
+<div class="main">
+
+<!-- GROUPS -->
+<div class="card">
+<h3>Groups</h3>
+<input type="text" id="groupName" placeholder="Create group (Trip, Roommates...)">
+<button onclick="addGroup()">Add Group</button>
+<select id="groupSelect"></select>
+</div>
+
+<!-- FRIENDS -->
+<div class="card">
+<h3>Add Friends</h3>
+<input type="text" id="friendName" placeholder="Friend name">
+<button onclick="addFriend()">Add Friend</button>
+<ul class="friend-list" id="friendList"></ul>
+</div>
+
+<!-- BILL -->
+<div class="card">
+<h3>Split Bill</h3>
+<input type="text" id="billName" placeholder="Bill name">
+<input type="number" id="billAmount" placeholder="Total amount">
+
+<h4>Enter payments</h4>
+<div id="splitInputs"></div>
+
+<button onclick="splitBill()">Calculate</button>
+
+<div id="result"></div>
+</div>
+
+<!-- BALANCES -->
+<div class="card">
+<h3>Who Owes Who</h3>
+<div id="balanceSummary" class="summary"></div>
+</div>
+
+<!-- TOTAL EXPENSES -->
+<div class="card">
+<h3>Total Expenses</h3>
+<div id="expenseSummary" class="summary"></div>
+</div>
+
+<!-- CHART -->
+<div class="card">
+<h3>Expense Chart</h3>
+<canvas id="expenseChart"></canvas>
+</div>
+
+<!-- EXPORT / INVITE -->
+<div class="card">
+<h3>Share Group</h3>
+<button onclick="generateInvite()">Generate Invite Link</button>
+<input id="inviteLink" readonly placeholder="Invite link will appear here">
+</div>
+
+<div class="card">
+<h3>Export Report</h3>
+<button onclick="exportPDF()">Export Bills to PDF</button>
+</div>
+
+<!-- BILL HISTORY -->
+<div class="card">
+<h3>Bills</h3>
+<ul id="billList" class="bill-list"></ul>
+</div>
+
+</div>
+</div>
+
+<script>
+
+let friends=[];
+let expenses={};
+let groups={};
+let currentGroup="Default";
+
+/* AUTH */
+
+function showRegister(){loginForm.classList.remove('active');registerForm.classList.add('active');}
+function showLogin(){registerForm.classList.remove('active');loginForm.classList.add('active');}
+
+function login(){
+if(loginEmail.value==='admin@example.com' && loginPassword.value==='1234'){
+authArea.style.display='none';dashboard.style.display='block';init();
+}else loginError.style.display='block';
+}
+
+function register(){
+if(registerPassword.value!==confirmPassword.value){registerError.style.display='block';return;}
+alert('Account created');showLogin();
+}
+
+function logout(){dashboard.style.display='none';authArea.style.display='flex';}
+
+/* INIT */
+
+function init(){
+if(!groups[currentGroup]) groups[currentGroup]=[];
+renderGroups();
+renderFriends();
+}
+
+/* GROUPS */
+
+function addGroup(){
+const name=groupName.value.trim();
+if(!name) return;
+
+groups[name]=[];
+
+const option=document.createElement('option');
+option.value=name;
+option.textContent=name;
+
+groupSelect.appendChild(option);
+
+groupName.value='';
+}
+
+/* FRIENDS */
+
+function renderFriends(){
+friendList.innerHTML='';
+splitInputs.innerHTML='';
+
+friends.forEach((f,i)=>{
+
+const li=document.createElement('li');
+li.innerHTML=`
+<span>${f}</span>
+<div class="friend-actions">
+<button onclick="editFriend(${i})">Edit</button>
+<button onclick="removeFriend(${i})">X</button>
+</div>`;
+
+friendList.appendChild(li);
+
+const row=document.createElement('div');
+row.className='split-row';
+row.innerHTML=`
+<input disabled value="${f}">
+<input type="number" placeholder="Amount" id="split-${i}">
+`;
+
+splitInputs.appendChild(row);
+
+if(!expenses[f]) expenses[f]=0;
+
+});
+
+updateSummaries();
+}
+
+function addFriend(){
+const name=friendName.value.trim();
+if(!name) return;
+
+friends.push(name);
+expenses[name]=0;
+friendName.value='';
+
+renderFriends();
+}
+
+function editFriend(i){
+const newName=prompt('Edit name',friends[i]);
+if(!newName) return;
+
+const old=friends[i];
+friends[i]=newName;
+expenses[newName]=expenses[old];
+delete expenses[old];
+
+renderFriends();
+}
+
+function removeFriend(i){
+const name=friends[i];
+friends.splice(i,1);
+delete expenses[name];
+renderFriends();
+}
+
+/* BILL */
+
+function splitBill(){
+
+const name=billName.value;
+const total=parseFloat(billAmount.value);
+
+if(!name || !total) return;
+
+let sum=0;
+let result='';
+
+friends.forEach((f,i)=>{
+
+const val=parseFloat(document.getElementById(`split-${i}`).value)||0;
+
+sum+=val;
+expenses[f]+=val;
+
+result+=`${f} paid $${val}\n`;
+
+});
+
+result+=`Total: $${sum}`;
+
+resultDiv=result;
+
+const li=document.createElement('li');
+
+const status=document.createElement('span');
+status.textContent='Pending';
+status.className='status-pending';
+
+status.onclick=()=>{
+if(status.textContent==='Pending'){
+status.textContent='Paid';
+status.className='status-paid';
+}else{
+status.textContent='Pending';
+status.className='status-pending';
+}
+};
+
+li.innerHTML=`<span>${name} - $${total}</span>`;
+li.appendChild(status);
+
+billList.appendChild(li);
+
+updateSummaries();
+updateChart();
+}
+
+/* SUMMARIES */
+
+function updateSummaries(){
+
+expenseSummary.innerHTML='';
+balanceSummary.innerHTML='';
+
+friends.forEach(f=>{
+
+const div=document.createElement('div');
+div.textContent=`${f}: $${expenses[f]}`;
+expenseSummary.appendChild(div);
+
+});
+
+const totalPaid=Object.values(expenses).reduce((a,b)=>a+b,0);
+const avg=totalPaid/(friends.length||1);
+
+friends.forEach(f=>{
+
+const diff=(expenses[f]-avg).toFixed(2);
+
+const div=document.createElement('div');
+
+if(diff>0)
+div.textContent=`${f} should receive $${diff}`;
+else if(diff<0)
+div.textContent=`${f} owes $${Math.abs(diff)}`;
+else div.textContent=`${f} is settled`;
+
+balanceSummary.appendChild(div);
+
+});
+
+}
+
+/* CHART */
+
+let chart;
+
+function updateChart(){
+
+const labels=friends;
+const data=friends.map(f=>expenses[f]);
+
+if(chart) chart.destroy();
+
+chart=new Chart(document.getElementById('expenseChart'),{
+ type:'bar',
+ data:{
+  labels:labels,
+  datasets:[{label:'Expenses',data:data}]
+ }
+});
+
+}
+
+</script>
+
+</body>
+</html>
